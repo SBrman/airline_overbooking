@@ -20,13 +20,19 @@ class Model:
         self.model = architecture
         self.loss_function = torch.nn.BCELoss()
         self.optimizer = torch.optim.Adam(self.model.parameters(), lr=learning_rate) 
+
         self.loss = None
+        self.epoch = 0
+
         self.loadModel(load_path)
     
     def train(self, epochs, trainPath):
         trainloader = DataLoader(trainPath, batch_size=self.batch_size)
-        for epoch in trange(epochs, desc="Epochs: "):
-            for i, batch in tqdm(enumerate(trainloader), desc='Batch: '):
+        total_batches = int(len(trainloader)/self.batch_size)
+        
+        pbar = tqdm(total=epochs-self.epoch, desc='Epoch: ')
+        while self.epoch <= epochs:
+            for i, batch in tqdm(enumerate(trainloader), total=total_batches, desc='Batch: '):
                 features, labels = self.process_data(batch)
                 self.model.zero_grad()
                 log_probs = self.model(features)
@@ -36,10 +42,14 @@ class Model:
                 
                 if i % 1000 == 0:
                     accuracy = self.accuracy(log_probs, labels)
-                    logging.debug(f'{epoch=}, {i=}, loss={self.loss.item()}, accuracy={accuracy.item()}')
+                    logging.debug(f'{self.epoch=}, {i=}, loss={self.loss.item()}, accuracy={accuracy.item()}')
                     
                 if i != 0 and i % 10000 == 0:
-                    self.saveModel(epoch, i, name=str(self.model))
+                    self.saveModel(self.epoch, i, name=str(self.model))
+
+            trainloader.reset()
+            self.epoch += 1
+            pbar.update(1)
 
     def saveModel(self, epoch, batch_num, name='model'):
         infoDict = {
@@ -91,12 +101,13 @@ class Model:
         inputs = inputs.to(device)
         labels = labels.to(device)
         return inputs, labels
+   
     
 if __name__ == "__main__":
     for ml_model in [LogisticRegression, NN1, NN2, NN3]:
         logging.debug(f'\nTraining model: {str(ml_model)}\n')
         architecture = ml_model(119, 1).to(device)
-        model = Model(architecture, learning_rate=0.0001, batch_size=2048)
+        model = Model(architecture, learning_rate=0.001, batch_size=5000)
         model.train(epochs=10, trainPath=f'./data/balanced_train.csv')
         model.predict(testPath=f'./data/balanced_test.csv')
         
