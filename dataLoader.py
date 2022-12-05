@@ -5,9 +5,10 @@ import pandas as pd
 
 class DataLoader:
     def __init__(self, filePath, batch_size):
-        self.batch_size = batch_size
+        self.half_batch_size = batch_size // 2
+        self.batch_size = self.half_batch_size * 2
         self.df = self.get_dataframe(filePath)
-        self._returned = self.df.index.to_numpy()
+        self.reset()
     
     @staticmethod
     def get_dataframe(filePath):
@@ -22,7 +23,9 @@ class DataLoader:
         return self
     
     def __next__(self):
-        if len(self._returned) <= self.batch_size:
+        
+        if self._zeros.shape[0] <= self.batch_size and \
+                self._ones.shape[0] <= self.batch_size:
             raise StopIteration
         
         next_batch = self.get_next_batch()
@@ -36,10 +39,17 @@ class DataLoader:
         return features_tensor, labels_tensor
     
     def get_next_batch(self):
-        batch_indeces = np.random.choice(self._returned, self.batch_size, replace=False)
-        self._returned = np.setdiff1d(self._returned, batch_indeces)
+        batch_indeces_zeros = np.random.choice(self._zeros, self.half_batch_size, replace=False)
+        self._zeros = np.setdiff1d(self._zeros, batch_indeces_zeros)
+
+        batch_indeces_ones = np.random.choice(self._ones, self.half_batch_size, replace=False)
+        self._ones = np.setdiff1d(self._ones, batch_indeces_ones)
+        
+        batch_indeces = np.union1d(batch_indeces_zeros, batch_indeces_ones)
+        np.random.shuffle(batch_indeces)
         
         return self.df.iloc[batch_indeces]
     
     def reset(self):
-        self._returned = self.df.index.to_numpy()
+        self._zeros = self.df[self.df.label == 0].index.to_numpy()
+        self._ones = self.df[self.df.label == 1].index.to_numpy()

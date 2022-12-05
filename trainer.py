@@ -1,10 +1,13 @@
 #! python3
 
 import time
-import torch
 import logging
+import torch
 from tqdm import tqdm, trange
-from architectures import LogisticRegression, NN1, NN2, NN3
+
+from torch.utils.tensorboard import SummaryWriter
+
+from architectures import *
 from dataLoader import DataLoader
 
 # logging.disable(level=logging.CRITICAL)
@@ -16,10 +19,12 @@ class Model:
     def __init__(self, architecture, learning_rate, batch_size, load_path=None):
         self.learning_rate = learning_rate
         self.batch_size = batch_size
+        self.writer = SummaryWriter(f'runs/{str(architecture)}_{time.time()}', 
+                                    comment=f'{str(architecture)}--{batch_size=}--{learning_rate=}')
 
         self.model = architecture
         self.loss_function = torch.nn.BCELoss()
-        self.optimizer = torch.optim.Adam(self.model.parameters(), lr=learning_rate) 
+        self.optimizer = torch.optim.Adam(self.model.parameters(), lr=learning_rate, weight_decay=1e-5, amsgrad=True) 
 
         self.loss = None
         self.epoch = 0
@@ -32,17 +37,33 @@ class Model:
         
         pbar = tqdm(total=epochs-self.epoch, desc='Epoch: ')
         while self.epoch <= epochs:
+
+            running_loss = 0.0
+            
             for i, batch in tqdm(enumerate(trainloader), total=total_batches, desc='Batch: '):
                 features, labels = self.process_data(batch)
-                self.model.zero_grad()
+                # self.model.zero_grad()
+                self.optimizer.zero_grad()
                 log_probs = self.model(features)
                 self.loss = self.loss_function(log_probs, labels)
                 self.loss.backward()
                 self.optimizer.step()
                 
-                if i % 1000 == 0:
+                running_loss += self.loss.item()
+                
+                if i % 100 == 99:
+                    self.model.eval()
+                    log_probs = self.model(features)
+                    self.model.train()
                     accuracy = self.accuracy(log_probs, labels)
-                    logging.debug(f'{self.epoch=}, {i=}, loss={self.loss.item()}, accuracy={accuracy.item()}')
+                    
+                    loss = running_loss / 100
+                    logging.debug(f'{self.epoch=}, {i=}, {loss=}, accuracy={accuracy.item()}')
+                    self.writer.add_scalars('Training Loss', {'Loss': loss}, self.epoch * total_batches + i)
+                    self.writer.add_scalars('Training Accuracy', {'Accuracy': accuracy.item()}, self.epoch * total_batches + i)
+                    self.writer.flush()
+
+                    running_loss = 0.0
                     
                 if i != 0 and i % 10000 == 0:
                     self.saveModel(self.epoch, i, name=str(self.model))
@@ -50,6 +71,8 @@ class Model:
             trainloader.reset()
             self.epoch += 1
             pbar.update(1)
+
+        self.saveModel(self.epoch, i, name=str(self.model))
 
     def saveModel(self, epoch, batch_num, name='model'):
         infoDict = {
@@ -71,7 +94,7 @@ class Model:
         self.model.eval()
     
     def predict(self, testPath):
-        testloader = DataLoader(testPath, batch_size=self.batch_size)
+        testloader = DataLoader(testPath, batch_size=10000)
 
         losses = []
         accuracies = []
@@ -91,7 +114,8 @@ class Model:
     @staticmethod
     @torch.no_grad()
     def accuracy(outputs, labels):
-        outputs.round()
+        outputs = torch.round(outputs)
+        # logging.debug(torch.unique(outputs, return_counts=True))
         inaccuracies = torch.sum(torch.abs(outputs - labels))
         return 1 - inaccuracies / labels.size(0)
     
@@ -104,11 +128,16 @@ class Model:
    
     
 if __name__ == "__main__":
-    for ml_model in [LogisticRegression, NN1, NN2, NN3]:
+    # for ml_model in [LogisticRegression, NN0, NN1, NN2]:
+    # for ml_model in [NN0, NN1, NN2, NN3]:
+    # for ml_model in [NN0d, NN1d, NNLR]:
+    # for ml_model in [NN2d, NN3d]:
+    for ml_model in [NN4d, ]:
         logging.debug(f'\nTraining model: {str(ml_model)}\n')
         architecture = ml_model(119, 1).to(device)
-        model = Model(architecture, learning_rate=0.001, batch_size=5000)
+        model = Model(architecture, learning_rate=0.001, batch_size=10000)
         model.train(epochs=10, trainPath=f'./data/balanced_train.csv')
-        model.predict(testPath=f'./data/balanced_test.csv')
+        test_accuracy = model.predict(testPath=f'./data/balanced_test.csv')
+        print(test_accuracy)
         
     
