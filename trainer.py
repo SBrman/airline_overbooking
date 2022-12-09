@@ -16,7 +16,10 @@ device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
 
 class Model:
-    def __init__(self, architecture, learning_rate, batch_size, load_path=None):
+    def __init__(self, architecture, learning_rate, batch_size, load_path=None, 
+                 trainPath=f'./data/balanced_train.csv', 
+                 testPath=f'./data/balanced_test.csv'):
+
         self.learning_rate = learning_rate
         self.batch_size = batch_size
         self.writer = SummaryWriter(f'runs/{str(architecture)}_{time.time()}', 
@@ -26,21 +29,24 @@ class Model:
         self.loss_function = torch.nn.BCELoss()
         self.optimizer = torch.optim.Adam(self.model.parameters(), lr=learning_rate, weight_decay=1e-5, amsgrad=True) 
 
+        self.trainloader = DataLoader(trainPath, batch_size=self.batch_size)
+        self.testloader = DataLoader(testPath, batch_size=10000)
+
         self.loss = None
         self.epoch = 0
 
         self.loadModel(load_path)
     
-    def train(self, epochs, trainPath):
-        trainloader = DataLoader(trainPath, batch_size=self.batch_size)
-        total_batches = int(len(trainloader)/self.batch_size)
+    def train(self, epochs):
+        total_batches = int(len(self.trainloader)/self.batch_size)
         
         pbar = tqdm(total=epochs-self.epoch, desc='Epoch: ')
         while self.epoch <= epochs:
 
             running_loss = 0.0
             
-            for i, batch in tqdm(enumerate(trainloader), total=total_batches, desc='Batch: '):
+            for i, batch in tqdm(enumerate(self.trainloader), total=total_batches, desc='Batch: '):
+
                 features, labels = self.process_data(batch)
                 # self.model.zero_grad()
                 self.optimizer.zero_grad()
@@ -54,6 +60,7 @@ class Model:
                 if i % 100 == 99:
                     self.model.eval()
                     log_probs = self.model(features)
+                    print(log_probs)
                     self.model.train()
                     accuracy = self.accuracy(log_probs, labels)
                     
@@ -61,6 +68,10 @@ class Model:
                     logging.debug(f'{self.epoch=}, {i=}, {loss=}, accuracy={accuracy.item()}')
                     self.writer.add_scalars('Training Loss', {'Loss': loss}, self.epoch * total_batches + i)
                     self.writer.add_scalars('Training Accuracy', {'Accuracy': accuracy.item()}, self.epoch * total_batches + i)
+                    
+                    test_acc, test_loss = self.predict()
+                    self.writer.add_scalars('Testing Loss', {'Loss': test_loss}, self.epoch * total_batches + i)
+                    self.writer.add_scalars('Testing Accuracy', {'Accuracy': test_acc}, self.epoch * total_batches + i)
                     self.writer.flush()
 
                     running_loss = 0.0
@@ -68,7 +79,7 @@ class Model:
                 if i != 0 and i % 10000 == 0:
                     self.saveModel(self.epoch, i, name=str(self.model))
 
-            trainloader.reset()
+            self.trainloader.reset()
             self.epoch += 1
             pbar.update(1)
 
@@ -93,13 +104,13 @@ class Model:
         self.loss = checkpoint['loss']
         self.model.eval()
     
-    def predict(self, testPath):
-        testloader = DataLoader(testPath, batch_size=10000)
-
+    def predict(self):
+        self.testloader.reset()
+            
         losses = []
         accuracies = []
         with torch.no_grad():
-            for batch in testloader:
+            for batch in self.testloader:
                 features, labels = self.process_data(batch)
                 log_probs = self.model(features)
 
@@ -109,7 +120,7 @@ class Model:
                 accuracy = self.accuracy(log_probs, labels)
                 accuracies.append(accuracy)
                 
-        return torch.stack(accuracies).mean().item()
+        return torch.stack(accuracies).mean().item(), torch.stack(losses).mean().item()
                 
     @staticmethod
     @torch.no_grad()
@@ -132,12 +143,12 @@ if __name__ == "__main__":
     # for ml_model in [NN0, NN1, NN2, NN3]:
     # for ml_model in [NN0d, NN1d, NNLR]:
     # for ml_model in [NN2d, NN3d]:
-    for ml_model in [NN4d, ]:
+    for ml_model in [LogisticRegression, NNLR, NN4d]:
         logging.debug(f'\nTraining model: {str(ml_model)}\n')
         architecture = ml_model(119, 1).to(device)
-        model = Model(architecture, learning_rate=0.001, batch_size=10000)
-        model.train(epochs=10, trainPath=f'./data/balanced_train.csv')
-        test_accuracy = model.predict(testPath=f'./data/balanced_test.csv')
+        model = Model(architecture, learning_rate=0.001, batch_size=20000)
+        model.train(epochs=50)
+        test_accuracy = model.predict()
         print(test_accuracy)
         
     
