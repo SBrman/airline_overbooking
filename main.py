@@ -82,7 +82,7 @@ if __name__ == '__main__':
     penalty = 2
     capacity = 186
     
-    main()
+##    main()
 
     # Usage example:
     # base_rec, ml_rec, mr, ar, br = generate_overbooking(flight_number, p, penalty, capacity, plot_title=None)
