@@ -4,11 +4,12 @@ from matplotlib import pyplot as plt
 from model_loader import *
 
 
-np.random.seed(42)
+np.random.seed(101)
 
 
 # Constants
-FLIGHT_DATA = np.genfromtxt('./data/final_flight_test.csv', delimiter=',')[1:, 2:]
+FLIGHT_DATA_ALL = np.genfromtxt('./data/final_flight_test_cc.csv', delimiter=',')
+FLIGHT_DATA = FLIGHT_DATA_ALL[1:, 2:]
 FLIGHTS = FLIGHT_DATA[:, -1]
 MODEL_PATH = './final_models/Neural_network3d_51_179_t_1670230822.552445.pt'
 # MODEL_PATH = './final_models/Logistic_regression_51_179_t_1670226651.3897946.pt'
@@ -77,7 +78,7 @@ def get_overbook_number(probabilities, max_overbook, penalty, method='binomial')
         
         for k in range(186, N+1):
             sum1 = sum1 + (k - 186) * pmf(N, k)
-
+        
         revenue = overbook - penalty * sum1
         
         if len(y) > 10 and all([i <= 0 for i in y[-2:]]): break

@@ -50,9 +50,13 @@ class DataFormatter:
     def denormalize(df, col):
         return (df[col] * (NORMALIZER[col]['max'] - NORMALIZER[col]['min'])) + NORMALIZER[col]['min']
 
-    def format_dataset(self):
+    def format_dataset(self, test=False):
+        
         df = self.df.astype({'partysize': 'int', 'overnights': 'int', 'datedif': 'int'})
 
+        if test:
+            df = df[df.label != 0]
+        
         origins_onehot = pd.get_dummies(df.origin, prefix='origin')
         destinations_onehot = pd.get_dummies(df.destination, prefix='destination')
         departday_onehot = pd.get_dummies(df.departday, prefix='departday')
@@ -96,8 +100,8 @@ class DataFormatter:
         
         self.df = df_new
     
-    def save_dataset(self, path):
-        self.format_dataset()
+    def save_dataset(self, path, test):
+        self.format_dataset(test)
         self.df.to_csv(path)
         
        
@@ -106,9 +110,9 @@ def main():
     Takes the csv file at source path convert to required format and then save it to the target path.
     """
     source_path = './unorganized/CleanedFullFlights.csv'
-    target_path = './data/final_flight_test.csv'
+    target_path = './data/final_flight_test_cc.csv'
     formatter = DataFormatter(source_path)
-    formatter.save_dataset(target_path)
+    formatter.save_dataset(target_path, test=True)
        
         
 if __name__ == '__main__':
