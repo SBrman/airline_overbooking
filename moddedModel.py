@@ -57,7 +57,7 @@ def get_overbook_number(probabilities, max_overbook, penalty, method='binomial')
     If the method is poisson_binomial, the expected input for probabilities is a list of
     individual passengers show up probabilities.
 
-    returns two lists: overbook numbers and revenues [?]
+    returns two lists: overbook numbers and revenues
     """
     if method == 'binomial':
         assert isinstance(probabilities, float), 'Probabilities must be the average probability.'

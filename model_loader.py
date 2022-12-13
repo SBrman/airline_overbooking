@@ -17,7 +17,7 @@ class Model:
         self.loadModel(loadPath)
 
     def loadModel(self, path):
-        checkpoint = torch.load(path)
+        checkpoint = torch.load(path, map_location=device)
         self.model.load_state_dict(checkpoint['model_state_dict'])
         self.model.eval()
         
